@@ -134,6 +134,60 @@ class PortalMonitor {
     return times.startHour < 8 && times.endHour >= 14;
   }
 
+  isInBlackoutWindow() {
+    // Get current time in EST (UTC-5)
+    const now = new Date();
+    const estOffset = -5 * 60; // EST is UTC-5
+    const estTime = new Date(now.getTime() + (estOffset + now.getTimezoneOffset()) * 60000);
+    const hour = estTime.getHours();
+    
+    // Blackout window: 10pm (22:00) to 7am (07:00) EST
+    return hour >= 22 || hour < 7;
+  }
+
+  parseJobDate(dateString) {
+    // Parse date string like "01-15-2026" or "1/15/2026"
+    const match = dateString.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+    if (!match) return null;
+    
+    const [_, month, day, year] = match;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+
+  shouldAcceptJobBasedOnTime(jobDate) {
+    if (!this.isInBlackoutWindow()) {
+      // Not in blackout window, accept any job
+      return { accept: true, reason: 'Outside blackout window (7am-10pm EST)' };
+    }
+
+    // We're in blackout window (10pm-7am EST)
+    const now = new Date();
+    const estOffset = -5 * 60;
+    const estTime = new Date(now.getTime() + (estOffset + now.getTimezoneOffset()) * 60000);
+    const currentHour = estTime.getHours();
+    
+    // Get today's date at midnight EST
+    const todayEST = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+    const tomorrowEST = new Date(todayEST);
+    tomorrowEST.setDate(tomorrowEST.getDate() + 1);
+    
+    const jobDateMidnight = new Date(jobDate.getFullYear(), jobDate.getMonth(), jobDate.getDate());
+    
+    if (currentHour >= 22) {
+      // Between 10pm-midnight: Don't accept jobs for tomorrow
+      if (jobDateMidnight.getTime() === tomorrowEST.getTime()) {
+        return { accept: false, reason: 'Blackout: After 10pm EST, job is for tomorrow' };
+      }
+    } else if (currentHour < 7) {
+      // Between midnight-7am: Don't accept jobs for today
+      if (jobDateMidnight.getTime() === todayEST.getTime()) {
+        return { accept: false, reason: 'Blackout: Before 7am EST, job is for today' };
+      }
+    }
+    
+    return { accept: true, reason: 'Job date outside blackout criteria' };
+  }
+
   async checkForJobs() {
     try {
       logger.info('Checking for available jobs...');
@@ -169,10 +223,10 @@ class PortalMonitor {
           logger.info(`DEBUG - First job has ${cellContents.length} columns: ${JSON.stringify(cellContents)}`);
         }
         
-        // Try to find location and time - adjust these indices based on actual structure
-        // Common patterns: [date, location, time, role, etc.] or [location, role, date, time]
+        // Try to find location, time, and date
         let location = '';
         let timeRange = '';
+        let dateString = '';
         
         // Look for school name (usually contains "School" or "High" or "Elementary")
         for (const cell of cellContents) {
@@ -190,11 +244,25 @@ class PortalMonitor {
           }
         }
         
+        // Look for date (format: MM-DD-YYYY or M/D/YYYY)
+        for (const cell of cellContents) {
+          if (/\d{1,2}[-\/]\d{1,2}[-\/]\d{4}/.test(cell)) {
+            dateString = cell;
+            break;
+          }
+        }
+        
+        const jobDate = this.parseJobDate(dateString);
+        const timeCheck = jobDate ? this.shouldAcceptJobBasedOnTime(jobDate) : { accept: true, reason: 'No date found' };
+        
         jobs.push({
           row,
           index: i,
           location: location,
           timeRange: timeRange,
+          dateString: dateString,
+          jobDate: jobDate,
+          timeCheck: timeCheck,
           allCells: cellContents
         });
         
@@ -202,7 +270,7 @@ class PortalMonitor {
         const isFullDay = this.isFullDayAssignment(timeRange);
         const isPrioritySchool = this.prioritySchools.some(school => location.includes(school));
         
-        logger.info(`Job ${i + 1}: ${location} | ${timeRange} | Full-Day: ${isFullDay} | Priority: ${isPrioritySchool}`);
+        logger.info(`Job ${i + 1}: ${location} | ${dateString} ${timeRange} | Full-Day: ${isFullDay} | Priority: ${isPrioritySchool} | ${timeCheck.reason}`);
       }
       
       logger.info('--- END OF AVAILABLE JOBS ---');
@@ -211,7 +279,13 @@ class PortalMonitor {
       for (const school of this.prioritySchools) {
         for (const job of jobs) {
           if (job.location.includes(school) && this.isFullDayAssignment(job.timeRange)) {
-            logger.info(`✓ MATCH FOUND: ${job.location} - ${job.timeRange}`);
+            // Check time-based filtering
+            if (!job.timeCheck.accept) {
+              logger.info(`⏰ MATCH SKIPPED (Time Blackout): ${job.location} - ${job.dateString} ${job.timeRange} - ${job.timeCheck.reason}`);
+              continue;
+            }
+            
+            logger.info(`✓ MATCH FOUND: ${job.location} - ${job.dateString} ${job.timeRange}`);
             return job;
           }
         }
