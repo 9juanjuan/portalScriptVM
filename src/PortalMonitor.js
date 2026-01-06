@@ -28,6 +28,7 @@ class PortalMonitor {
   async initialize() {
     try {
       logger.info('Initializing portal monitor...');
+      logger.info('Launching Chromium browser...');
       
       this.browser = await chromium.launch({
         headless: true,
@@ -38,10 +39,14 @@ class PortalMonitor {
         ]
       });
       
+      logger.info('Browser launched, creating context...');
+      
       const context = await this.browser.newContext({
         viewport: { width: 1920, height: 1080 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
       });
+      
+      logger.info('Context created, creating new page...');
       
       this.page = await context.newPage();
       this.page.setDefaultTimeout(this.pageLoadTimeout);
@@ -49,7 +54,7 @@ class PortalMonitor {
       logger.info('Portal monitor initialized successfully');
       return true;
     } catch (error) {
-      logger.error('Failed to initialize portal monitor', { error: error.message });
+      logger.error('Failed to initialize portal monitor', { error: error.message, stack: error.stack });
       await this.cleanup();
       return false;
     }
