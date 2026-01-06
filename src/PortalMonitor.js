@@ -28,21 +28,13 @@ class PortalMonitor {
   async initialize() {
     try {
       logger.info('Initializing portal monitor...');
+      
       this.browser = await chromium.launch({
         headless: true,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--disable-features=TranslateUI',
-          '--disable-ipc-flooding-protection'
+          '--disable-dev-shm-usage'
         ]
       });
       
