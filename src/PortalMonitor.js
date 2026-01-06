@@ -157,22 +157,52 @@ class PortalMonitor {
         
         if (cells.length === 0) continue;
         
-        // Extract job details (adjust indices based on actual table structure)
-        const location = await cells[0]?.textContent() || '';
-        const timeRange = await cells[2]?.textContent() || '';
+        // Extract ALL cell contents to debug table structure
+        const cellContents = [];
+        for (let j = 0; j < cells.length; j++) {
+          const text = await cells[j]?.textContent() || '';
+          cellContents.push(text.trim());
+        }
+        
+        // Log raw cell data for debugging (first job only)
+        if (i === 0) {
+          logger.info(`DEBUG - First job has ${cellContents.length} columns: ${JSON.stringify(cellContents)}`);
+        }
+        
+        // Try to find location and time - adjust these indices based on actual structure
+        // Common patterns: [date, location, time, role, etc.] or [location, role, date, time]
+        let location = '';
+        let timeRange = '';
+        
+        // Look for school name (usually contains "School" or "High" or "Elementary")
+        for (const cell of cellContents) {
+          if (cell.includes('School') || cell.includes('High') || cell.includes('Elementary') || cell.includes('Intermediate')) {
+            location = cell;
+            break;
+          }
+        }
+        
+        // Look for time range (contains AM/PM and dash)
+        for (const cell of cellContents) {
+          if (cell.includes('AM') || cell.includes('PM')) {
+            timeRange = cell;
+            break;
+          }
+        }
         
         jobs.push({
           row,
           index: i,
-          location: location.trim(),
-          timeRange: timeRange.trim()
+          location: location,
+          timeRange: timeRange,
+          allCells: cellContents
         });
         
         // Log ALL jobs regardless of criteria
-        const isFullDay = this.isFullDayAssignment(timeRange.trim());
-        const isPrioritySchool = this.prioritySchools.some(school => location.trim().includes(school));
+        const isFullDay = this.isFullDayAssignment(timeRange);
+        const isPrioritySchool = this.prioritySchools.some(school => location.includes(school));
         
-        logger.info(`Job ${i + 1}: ${location.trim()} | ${timeRange.trim()} | Full-Day: ${isFullDay} | Priority: ${isPrioritySchool}`);
+        logger.info(`Job ${i + 1}: ${location} | ${timeRange} | Full-Day: ${isFullDay} | Priority: ${isPrioritySchool}`);
       }
       
       logger.info('--- END OF AVAILABLE JOBS ---');
