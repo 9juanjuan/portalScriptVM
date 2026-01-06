@@ -147,6 +147,7 @@ class PortalMonitor {
       }
       
       logger.info(`Found ${rows.length} job(s) in table`);
+      logger.info('--- ALL AVAILABLE JOBS ---');
       
       // Parse all jobs
       const jobs = [];
@@ -167,8 +168,14 @@ class PortalMonitor {
           timeRange: timeRange.trim()
         });
         
-        logger.info(`Job ${i + 1}: ${location.trim()} - ${timeRange.trim()}`);
+        // Log ALL jobs regardless of criteria
+        const isFullDay = this.isFullDayAssignment(timeRange.trim());
+        const isPrioritySchool = this.prioritySchools.some(school => location.trim().includes(school));
+        
+        logger.info(`Job ${i + 1}: ${location.trim()} | ${timeRange.trim()} | Full-Day: ${isFullDay} | Priority: ${isPrioritySchool}`);
       }
+      
+      logger.info('--- END OF AVAILABLE JOBS ---');
       
       // Filter and prioritize jobs
       for (const school of this.prioritySchools) {
