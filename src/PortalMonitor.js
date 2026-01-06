@@ -244,8 +244,11 @@ class PortalMonitor {
       logger.info('Refreshing job table...');
       await this.page.click('#refresh');
       
-      // Wait for table to reload
-      await this.page.waitForTimeout(1000);
+      // Wait for table to reload and stabilize
+      await this.page.waitForTimeout(2000);
+      
+      // Wait for table to be visible again after refresh
+      await this.page.waitForSelector('#tableTable', { timeout: 5000 });
       
       logger.info('Job table refreshed');
       return true;
@@ -349,17 +352,6 @@ class PortalMonitor {
   async monitoringLoop() {
     while (this.isRunning) {
       try {
-        // Verify we're still logged in
-        const isLoggedIn = await this.verifyLogin();
-        if (!isLoggedIn) {
-          logger.warn('Session expired, re-authenticating...');
-          const loginSuccess = await this.login();
-          if (!loginSuccess) {
-            throw new Error('Failed to re-authenticate');
-          }
-          await this.navigateToJobSearch();
-        }
-
         // Check for matching jobs
         const matchingJob = await this.checkForJobs();
         
@@ -383,6 +375,17 @@ class PortalMonitor {
         // Refresh the job table
         await this.refreshJobTable();
         
+        // After refresh completes, verify we're still logged in
+        const isLoggedIn = await this.verifyLogin();
+        if (!isLoggedIn) {
+          logger.warn('Session expired, re-authenticating...');
+          const loginSuccess = await this.login();
+          if (!loginSuccess) {
+            throw new Error('Failed to re-authenticate');
+          }
+          await this.navigateToJobSearch();
+        }
+        
       } catch (error) {
         logger.error('Error in monitoring loop', { error: error.message, stack: error.stack });
         
@@ -390,7 +393,8 @@ class PortalMonitor {
         if (error.message.includes('net::') || 
             error.message.includes('timeout') || 
             error.message.includes('Navigation') ||
-            error.message.includes('Target closed')) {
+            error.message.includes('Target closed') ||
+            error.message.includes('Execution context was destroyed')) {
           logger.error('Network/timeout error detected');
           await this.handleNetworkError();
           break;
