@@ -75,8 +75,9 @@ class PortalMonitor {
       await this.page.fill('#pin', this.pin);
       logger.info('Entered PIN');
       
-      // Submit the form
-      await this.page.click('button[type="submit"], input[type="submit"]');
+      // Click the OK button to submit
+      await this.page.click('#ok');
+      logger.info('Clicked OK button');
       
       // Wait for navigation after login
       await this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: this.pageLoadTimeout });
