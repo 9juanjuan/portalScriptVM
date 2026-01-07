@@ -19,7 +19,7 @@ class PortalMonitor {
     // Priority schools in order
     this.prioritySchools = [
       'Pasadena Memorial High School',
-      'Dolby High School',
+      'Dobie',
       'South Houston High School',
       'Pasadena High School'
     ];
